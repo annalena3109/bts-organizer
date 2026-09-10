@@ -283,10 +283,10 @@ export default function Dashboard() {
               }
             >
               <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {outfit.name}
+                {outfit?.name || 'Cozy Study Fit'}
               </p>
               <ul style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', paddingLeft: '1rem', marginTop: '0.35rem' }}>
-                {outfit.items.map((item, idx) => (
+                {(Array.isArray(outfit?.items) ? outfit.items : []).map((item, idx) => (
                   <li key={idx}>{item}</li>
                 ))}
               </ul>

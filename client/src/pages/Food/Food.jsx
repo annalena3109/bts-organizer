@@ -97,35 +97,43 @@ export default function Food() {
   const [newItemName, setNewItemName] = useState('');
   const [newItemCat, setNewItemCat] = useState('Produce');
 
-  // Saturday Workflow Checklist
-  const [saturdaySteps, setSaturdaySteps] = useState(() => {
+  // General "Prepped Day 1" style weekly prep progress
+  const [prepDays, setPrepDays] = useState(() => {
     try {
-      const cached = localStorage.getItem('bts_cached_saturday_steps');
+      const cached = localStorage.getItem('bts_cached_prep_days');
       if (cached) return JSON.parse(cached);
     } catch (e) {}
     return [
-      { id: 1, text: 'Audit fridge, pantry, and produce before grocery shopping', done: true },
-      { id: 2, text: 'Select 3 core weekday batch recipes (1 grain bowl, 1 soup/stew, 1 quick protein)', done: true },
-      { id: 3, text: 'Add missing staple ingredients to the Sunday Shopping List', done: false },
-      { id: 4, text: 'Review school exam schedule to ensure meals match busy evenings', done: false },
+      { id: '1', label: 'Prepped Day 1 (Monday)', note: 'Breakfast, lunch & snacks packed or ready in fridge', done: true },
+      { id: '2', label: 'Prepped Day 2 (Tuesday)', note: 'Containers portioned and ready to grab', done: true },
+      { id: '3', label: 'Prepped Day 3 (Wednesday)', note: 'Mid-week meal portions set aside', done: false },
+      { id: '4', label: 'Prepped Day 4 (Thursday)', note: 'Late-week meal portions prepped', done: false },
+      { id: '5', label: 'Prepped Day 5 (Friday)', note: 'Friday meals prepped or grab-and-go ready', done: false },
+      { id: '6', label: 'Prepped Snacks & Bites', note: 'Energy snacks, fruits, and study munchies ready', done: false },
+      { id: '7', label: 'Prepped Emergency Portion', note: 'Backup portion in freezer for intense study nights', done: false },
     ];
   });
 
-  // Sunday Meal Prep Checklist
-  const [sundaySteps, setSundaySteps] = useState(() => {
+  // General weekly routine habits (not recipe-specific)
+  const [prepRoutine, setPrepRoutine] = useState(() => {
     try {
-      const cached = localStorage.getItem('bts_cached_sunday_steps');
+      const cached = localStorage.getItem('bts_cached_prep_routine');
       if (cached) return JSON.parse(cached);
     } catch (e) {}
     return [
-      { id: 1, text: 'Cook grain base in batch (Quinoa / Brown Rice / Farro)', done: false },
-      { id: 2, text: 'Roast sheet-pan vegetables (Sweet potatoes, broccoli, peppers)', done: false },
-      { id: 3, text: 'Simmer weekday soup or batch curry (Lentils or Chili)', done: false },
-      { id: 4, text: 'Pre-portion overnight oats jars for Monday through Thursday', done: true },
-      { id: 5, text: 'Wash, dry, and spin salad greens; store with dry cloth', done: false },
-      { id: 6, text: 'Label and freeze 2 portions for emergency study nights', done: false },
+      { id: '1', text: 'Audit fridge, pantry & grocery staples', done: true },
+      { id: '2', text: 'Review upcoming school & exam schedule', done: true },
+      { id: '3', text: 'Pick up weekly groceries and fresh produce', done: false },
+      { id: '4', text: 'Wash, chop & store produce for the week', done: false },
+      { id: '5', text: 'Cook base grains / proteins and portion containers', done: false },
+      { id: '6', text: 'Pack lunchboxes and fill water carafe', done: false },
     ];
   });
+
+  // Add Prep Day modal
+  const [isAddPrepModalOpen, setIsAddPrepModalOpen] = useState(false);
+  const [newPrepLabel, setNewPrepLabel] = useState('');
+  const [newPrepNote, setNewPrepNote] = useState('');
 
   // Load from API on mount
   useEffect(() => {
@@ -240,16 +248,51 @@ export default function Food() {
     setIsMealModalOpen(false);
   };
 
-  const toggleSaturdayStep = (id) => {
-    const updated = saturdaySteps.map(s => s.id === id ? { ...s, done: !s.done } : s);
-    setSaturdaySteps(updated);
-    try { localStorage.setItem('bts_cached_saturday_steps', JSON.stringify(updated)); } catch (e) {}
+  const togglePrepDay = (id) => {
+    const updated = prepDays.map(d => d.id === id ? { ...d, done: !d.done } : d);
+    setPrepDays(updated);
+    try { localStorage.setItem('bts_cached_prep_days', JSON.stringify(updated)); } catch (e) {}
   };
 
-  const toggleSundayStep = (id) => {
-    const updated = sundaySteps.map(s => s.id === id ? { ...s, done: !s.done } : s);
-    setSundaySteps(updated);
-    try { localStorage.setItem('bts_cached_sunday_steps', JSON.stringify(updated)); } catch (e) {}
+  const resetPrepDays = () => {
+    const updated = prepDays.map(d => ({ ...d, done: false }));
+    setPrepDays(updated);
+    try { localStorage.setItem('bts_cached_prep_days', JSON.stringify(updated)); } catch (e) {}
+  };
+
+  const deletePrepDay = (id) => {
+    const updated = prepDays.filter(d => d.id !== id);
+    setPrepDays(updated);
+    try { localStorage.setItem('bts_cached_prep_days', JSON.stringify(updated)); } catch (e) {}
+  };
+
+  const addPrepDay = (e) => {
+    e.preventDefault();
+    if (!newPrepLabel.trim()) return;
+    const newItem = {
+      id: String(Date.now()),
+      label: newPrepLabel.trim(),
+      note: newPrepNote.trim() || 'Custom meal prep milestone',
+      done: false
+    };
+    const updated = [...prepDays, newItem];
+    setPrepDays(updated);
+    try { localStorage.setItem('bts_cached_prep_days', JSON.stringify(updated)); } catch (e) {}
+    setNewPrepLabel('');
+    setNewPrepNote('');
+    setIsAddPrepModalOpen(false);
+  };
+
+  const togglePrepRoutine = (id) => {
+    const updated = prepRoutine.map(r => r.id === id ? { ...r, done: !r.done } : r);
+    setPrepRoutine(updated);
+    try { localStorage.setItem('bts_cached_prep_routine', JSON.stringify(updated)); } catch (e) {}
+  };
+
+  const resetPrepRoutine = () => {
+    const updated = prepRoutine.map(r => ({ ...r, done: false }));
+    setPrepRoutine(updated);
+    try { localStorage.setItem('bts_cached_prep_routine', JSON.stringify(updated)); } catch (e) {}
   };
 
   const toggleShoppingItem = async (id) => {
@@ -629,65 +672,149 @@ export default function Food() {
         </Card>
       )}
 
-      {/* TAB 4: PREP RITUALS (Saturday Planning & Sunday Meal Prep Checklists) */}
+      {/* TAB 4: PREP RITUALS (General Day-by-Day Meal Prep Tracking) */}
       {activeTab === 'prep' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Saturday Planning Workflow */}
+          {/* Top Prep Stats Summary */}
+          <div className="grid-cards">
+            <Card subtle>
+              <div className="flex-between">
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>DAYS PREPPED</span>
+                <ChefHat size={16} color="var(--accent-sage)" />
+              </div>
+              <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--accent-sage)', marginTop: '4px' }}>
+                {prepDays.filter(d => d.done).length} / {prepDays.length}
+              </p>
+              <div className="progress-bar-container" style={{ margin: '8px 0 6px 0' }}>
+                <div
+                  className="progress-bar-fill"
+                  style={{
+                    width: `${Math.min(100, Math.round((prepDays.filter(d => d.done).length / (prepDays.length || 1)) * 100))}%`,
+                    background: 'var(--accent-sage)'
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                {prepDays.filter(d => d.done).length === prepDays.length ? 'Fully prepared for the week!' : 'Keep momentum going'}
+              </span>
+            </Card>
+
+            <Card subtle>
+              <div className="flex-between">
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>PREP ROUTINE</span>
+                <Calendar size={16} color="var(--accent-amber)" />
+              </div>
+              <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '4px' }}>
+                {prepRoutine.filter(r => r.done).length} / {prepRoutine.length} Steps
+              </p>
+              <div className="progress-bar-container" style={{ margin: '8px 0 6px 0' }}>
+                <div
+                  className="progress-bar-fill"
+                  style={{
+                    width: `${Math.min(100, Math.round((prepRoutine.filter(r => r.done).length / (prepRoutine.length || 1)) * 100))}%`,
+                    background: 'var(--accent-amber)'
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Weekly organization progress</span>
+            </Card>
+          </div>
+
+          {/* Card 1: General Prepped Day Milestones */}
           <Card
-            title="Saturday Planning Ritual"
-            subtitle="Set aside 15 minutes each Saturday to audit supplies and choose nourishing weekday recipes."
+            title="Weekly Meal Prep Milestones"
+            subtitle="Track prep status day-by-day without worrying about rigid recipes."
+            action={
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <Button variant="ghost" size="sm" icon={RotateCcw} onClick={resetPrepDays}>
+                  Reset All
+                </Button>
+                <Button variant="secondary" size="sm" icon={Plus} onClick={() => setIsAddPrepModalOpen(true)}>
+                  Add Stage
+                </Button>
+              </div>
+            }
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {saturdaySteps.map((step, idx) => (
-                <label
-                  key={step.id}
-                  onClick={() => toggleSaturdayStep(step.id)}
+              {prepDays.map((item) => (
+                <div
+                  key={item.id}
                   style={{
                     display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                     padding: '0.875rem',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-subtle)',
-                    background: step.done ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
-                    cursor: 'pointer'
+                    background: item.done ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
+                    opacity: item.done ? 0.75 : 1
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={step.done}
-                    onChange={() => {}}
-                    style={{ marginTop: '2px', accentColor: 'var(--accent-amber)' }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-amber)' }}>
-                      STEP {idx + 1}
+                  <label
+                    onClick={() => togglePrepDay(item.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      cursor: 'pointer',
+                      flex: 1
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      onChange={() => {}}
+                      style={{ accentColor: 'var(--accent-sage)', cursor: 'pointer', width: '18px', height: '18px' }}
+                    />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span
+                          style={{
+                            fontSize: '0.95rem',
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            textDecoration: item.done ? 'line-through' : 'none'
+                          }}
+                        >
+                          {item.label}
+                        </span>
+                        <Badge variant={item.done ? 'sage' : 'subtle'}>
+                          {item.done ? 'Prepped' : 'Pending'}
+                        </Badge>
+                      </div>
+                      {item.note && (
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          {item.note}
+                        </p>
+                      )}
                     </div>
-                    <p style={{
-                      fontSize: '0.875rem',
-                      color: 'var(--text-primary)',
-                      textDecoration: step.done ? 'line-through' : 'none',
-                      opacity: step.done ? 0.7 : 1,
-                      marginTop: '2px'
-                    }}>
-                      {step.text}
-                    </p>
-                  </div>
-                </label>
+                  </label>
+
+                  {prepDays.length > 5 && (
+                    <Button variant="ghost" size="icon" onClick={() => deletePrepDay(item.id)} title="Remove milestone">
+                      <Trash2 size={14} />
+                    </Button>
+                  )}
+                </div>
               ))}
             </div>
           </Card>
 
-          {/* Sunday Batch Preparation Routine */}
+          {/* Card 2: General Weekly Prep Checklist */}
           <Card
-            title="Sunday Batch Preparation Routine"
-            subtitle="Spend 90 minutes cooking 3 foundation bases to fuel your entire school week."
+            title="Weekly Prep Routine Checklist"
+            subtitle="Low-stress habit checklist to keep meal routines smooth throughout the school term."
+            action={
+              <Button variant="ghost" size="sm" icon={RotateCcw} onClick={resetPrepRoutine}>
+                Reset Routine
+              </Button>
+            }
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {sundaySteps.map((step, idx) => (
+              {prepRoutine.map((step, idx) => (
                 <label
                   key={step.id}
-                  onClick={() => toggleSundayStep(step.id)}
+                  onClick={() => togglePrepRoutine(step.id)}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
@@ -703,19 +830,21 @@ export default function Food() {
                     type="checkbox"
                     checked={step.done}
                     onChange={() => {}}
-                    style={{ marginTop: '2px', accentColor: 'var(--accent-sage)' }}
+                    style={{ marginTop: '3px', accentColor: 'var(--accent-sage)', cursor: 'pointer' }}
                   />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-sage)' }}>
-                      BATCH STAGE {idx + 1}
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent-amber)', textTransform: 'uppercase' }}>
+                      Stage {idx + 1}
                     </div>
-                    <p style={{
-                      fontSize: '0.875rem',
-                      color: 'var(--text-primary)',
-                      textDecoration: step.done ? 'line-through' : 'none',
-                      opacity: step.done ? 0.7 : 1,
-                      marginTop: '2px'
-                    }}>
+                    <p
+                      style={{
+                        fontSize: '0.875rem',
+                        color: 'var(--text-primary)',
+                        textDecoration: step.done ? 'line-through' : 'none',
+                        opacity: step.done ? 0.7 : 1,
+                        marginTop: '2px'
+                      }}
+                    >
                       {step.text}
                     </p>
                   </div>
@@ -798,6 +927,38 @@ export default function Food() {
             </Button>
             <Button variant="primary" type="submit">
               Add To List
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Add Prep Day / Stage Modal */}
+      <Modal
+        isOpen={isAddPrepModalOpen}
+        onClose={() => setIsAddPrepModalOpen(false)}
+        title="Add Meal Prep Milestone"
+      >
+        <form onSubmit={addPrepDay}>
+          <Input
+            label="Milestone Title"
+            value={newPrepLabel}
+            onChange={(e) => setNewPrepLabel(e.target.value)}
+            placeholder="e.g. Prepped Weekend Study Lunches"
+            required
+            autoFocus
+          />
+          <Input
+            label="Notes / Description"
+            value={newPrepNote}
+            onChange={(e) => setNewPrepNote(e.target.value)}
+            placeholder="e.g. Extra grain bowls & cold brew in fridge"
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+            <Button variant="secondary" onClick={() => setIsAddPrepModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit">
+              Add Milestone
             </Button>
           </div>
         </form>

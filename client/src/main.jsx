@@ -7,11 +7,15 @@ import './styles/index.css';
 import './styles/layout.css';
 
 // PWA Service Worker Registration
-if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+if ('serviceWorker' in navigator && (import.meta.env.PROD || window.location.protocol === 'https:')) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.log('SW registration note:', err);
-    });
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => {
+        reg.update().catch(() => {});
+      })
+      .catch((err) => {
+        console.log('SW registration note:', err);
+      });
   });
 }
 
