@@ -1,0 +1,25 @@
+{
+  "short_name": "BackToSchool",
+  "name": "Back to School & Life Organizer",
+  "description": "Personal calm organization and productivity workspace",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#FAF8F5",
+  "theme_color": "#FAF8F5",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/"
+}

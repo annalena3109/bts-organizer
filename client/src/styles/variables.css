@@ -1,0 +1,70 @@
+:root {
+  /* Warm Cream & Cozy Palette */
+  --bg-app: #FAF8F5;
+  --bg-card: #FFFFFF;
+  --bg-card-subtle: #F6F3EE;
+  --bg-hover: #F2ECE4;
+  --bg-active: #EBE4DA;
+  
+  /* Borders */
+  --border-color: #E8E2D8;
+  --border-subtle: #EFEBE4;
+  --border-focus: #5B7065;
+
+  /* Typography */
+  --text-primary: #2C2B29;
+  --text-secondary: #747069;
+  --text-muted: #9E9990;
+  --text-inverse: #FFFFFF;
+
+  /* Restrained Accents */
+  --accent-sage: #5B7065;
+  --accent-sage-light: #EBF0ED;
+  --accent-terracotta: #C47D68;
+  --accent-terracotta-light: #F9EFEA;
+  --accent-amber: #C08D4D;
+  --accent-amber-light: #FBF4E8;
+  --accent-slate: #536B78;
+  --accent-slate-light: #ECF1F3;
+  --accent-rose: #B86B77;
+  --accent-rose-light: #FAECEE;
+
+  /* Priority Tokens */
+  --priority-high: #C47D68;
+  --priority-medium: #C08D4D;
+  --priority-low: #5B7065;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(44, 43, 41, 0.04);
+  --shadow-md: 0 2px 8px rgba(44, 43, 41, 0.06);
+  --shadow-lg: 0 8px 24px rgba(44, 43, 41, 0.08);
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.875rem;
+  --space-lg: 1.25rem;
+  --space-xl: 1.75rem;
+  --space-2xl: 2.5rem;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.22s ease;
+
+  /* Safe Area Variables with Fallbacks */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Layout dimensions */
+  --sidebar-width: 250px;
+  --header-height: 56px;
+  --bottom-nav-height: 60px;
+}
