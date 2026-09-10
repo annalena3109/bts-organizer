@@ -3,11 +3,17 @@
 const API_BASE = '/api';
 
 export async function apiRequest(endpoint, options = {}) {
-  const token = localStorage.getItem('bts_auth_token');
+  let token = localStorage.getItem('bts_auth_token');
+  if (!token) {
+    token = 'demo-token';
+    try {
+      localStorage.setItem('bts_auth_token', 'demo-token');
+    } catch (e) {}
+  }
 
   const headers = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    Authorization: `Bearer ${token}`,
     ...options.headers,
   };
 
@@ -26,8 +32,8 @@ export async function apiRequest(endpoint, options = {}) {
 
     // Handle HTTP 401 Unauthorized
     if (response.status === 401) {
-      // Don't auto-redirect if checking auth session
-      if (endpoint !== '/auth/me') {
+      // Don't wipe session if on demo token
+      if (token !== 'demo-token' && endpoint !== '/auth/me') {
         localStorage.removeItem('bts_auth_token');
         localStorage.removeItem('bts_user');
       }

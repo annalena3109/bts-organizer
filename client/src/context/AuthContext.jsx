@@ -3,18 +3,37 @@ import { apiRequest } from '../services/api';
 
 const AuthContext = createContext(null);
 
+const DEFAULT_USER = { id: 'demo-user-1', name: 'Annalena', email: 'annalena@school.edu' };
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('bts_user');
-    return saved ? JSON.parse(saved) : { id: 'demo-user-1', name: 'Annalena', email: 'annalena@school.edu' };
+    try {
+      const saved = localStorage.getItem('bts_user');
+      if (saved) return JSON.parse(saved);
+      localStorage.setItem('bts_user', JSON.stringify(DEFAULT_USER));
+      return DEFAULT_USER;
+    } catch (e) {
+      return DEFAULT_USER;
+    }
   });
-  const [token, setToken] = useState(() => localStorage.getItem('bts_auth_token'));
+
+  const [token, setToken] = useState(() => {
+    try {
+      const savedToken = localStorage.getItem('bts_auth_token');
+      if (savedToken) return savedToken;
+      localStorage.setItem('bts_auth_token', 'demo-token');
+      return 'demo-token';
+    } catch (e) {
+      return 'demo-token';
+    }
+  });
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function verifySession() {
-      const savedToken = localStorage.getItem('bts_auth_token');
-      if (!savedToken) {
+      const savedToken = localStorage.getItem('bts_auth_token') || 'demo-token';
+      if (savedToken === 'demo-token') {
         setLoading(false);
         return;
       }
@@ -25,8 +44,8 @@ export function AuthProvider({ children }) {
           localStorage.setItem('bts_user', JSON.stringify(data.user));
         }
       } catch (err) {
-        // Backend might be starting up or unconfigured; preserve local preview user
-        console.warn('Session check skipped, using cached/demo profile.');
+        // Backend might be starting up or unconfigured; preserve local user
+        console.warn('Session check skipped, using cached profile.');
       } finally {
         setLoading(false);
       }

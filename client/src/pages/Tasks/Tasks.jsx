@@ -28,7 +28,13 @@ const INITIAL_TASKS = [
 ];
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const [tasks, setTasks] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_tasks');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return INITIAL_TASKS;
+  });
   const [activeTab, setActiveTab] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -45,11 +51,14 @@ export default function Tasks() {
     async function loadTasks() {
       try {
         const data = await apiRequest('/tasks');
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setTasks(data);
+          try {
+            localStorage.setItem('bts_cached_tasks', JSON.stringify(data));
+          } catch (e) {}
         }
       } catch (e) {
-        // use initial fallback
+        // use initial fallback / cached data
       }
     }
     loadTasks();
@@ -89,7 +98,9 @@ export default function Tasks() {
         priority,
         due_date: dueDate
       };
-      setTasks(prev => prev.map(t => t.id === editingTask.id ? updated : t));
+      const updatedTasks = tasks.map(t => t.id === editingTask.id ? updated : t);
+      setTasks(updatedTasks);
+      try { localStorage.setItem('bts_cached_tasks', JSON.stringify(updatedTasks)); } catch (e) {}
       try {
         await apiRequest(`/tasks/${editingTask.id}`, {
           method: 'PUT',
@@ -110,7 +121,9 @@ export default function Tasks() {
         completed: false,
         created_at: new Date().toISOString()
       };
-      setTasks(prev => [newTask, ...prev]);
+      const updatedTasks = [newTask, ...tasks];
+      setTasks(updatedTasks);
+      try { localStorage.setItem('bts_cached_tasks', JSON.stringify(updatedTasks)); } catch (e) {}
       try {
         await apiRequest('/tasks', {
           method: 'POST',
@@ -127,7 +140,9 @@ export default function Tasks() {
     const target = tasks.find(t => t.id === taskId);
     if (!target) return;
     const newCompleted = !target.completed;
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t));
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t);
+    setTasks(updatedTasks);
+    try { localStorage.setItem('bts_cached_tasks', JSON.stringify(updatedTasks)); } catch (e) {}
     try {
       await apiRequest(`/tasks/${taskId}/toggle`, {
         method: 'PATCH',
@@ -139,7 +154,9 @@ export default function Tasks() {
   };
 
   const deleteTask = async (taskId) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
+    const updatedTasks = tasks.filter(t => t.id !== taskId);
+    setTasks(updatedTasks);
+    try { localStorage.setItem('bts_cached_tasks', JSON.stringify(updatedTasks)); } catch (e) {}
     try {
       await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' });
     } catch (err) {

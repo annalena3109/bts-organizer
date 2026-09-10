@@ -28,7 +28,13 @@ const INITIAL_RECORDS = [
 ];
 
 export default function Sleep() {
-  const [records, setRecords] = useState(INITIAL_RECORDS);
+  const [records, setRecords] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_sleep');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return INITIAL_RECORDS;
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form state
@@ -42,11 +48,12 @@ export default function Sleep() {
     async function loadSleep() {
       try {
         const data = await apiRequest('/sleep');
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setRecords(data);
+          try { localStorage.setItem('bts_cached_sleep', JSON.stringify(data)); } catch (e) {}
         }
       } catch (e) {
-        // use fallback
+        // use fallback / cached data
       }
     }
     loadSleep();
@@ -74,7 +81,9 @@ export default function Sleep() {
       notes
     };
 
-    setRecords(prev => [newRecord, ...prev]);
+    const updatedRecords = [newRecord, ...records];
+    setRecords(updatedRecords);
+    try { localStorage.setItem('bts_cached_sleep', JSON.stringify(updatedRecords)); } catch (e) {}
     try {
       await apiRequest('/sleep', {
         method: 'POST',
@@ -87,7 +96,9 @@ export default function Sleep() {
   };
 
   const handleDeleteRecord = async (id) => {
-    setRecords(prev => prev.filter(r => r.id !== id));
+    const updatedRecords = records.filter(r => r.id !== id);
+    setRecords(updatedRecords);
+    try { localStorage.setItem('bts_cached_sleep', JSON.stringify(updatedRecords)); } catch (e) {}
     try {
       await apiRequest(`/sleep/${id}`, { method: 'DELETE' });
     } catch (e) {}

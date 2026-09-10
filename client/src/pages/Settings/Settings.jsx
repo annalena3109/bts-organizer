@@ -40,6 +40,19 @@ export default function Settings() {
   const [savedStatus, setSavedStatus] = useState('');
 
   useEffect(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_preferences');
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.currency) setCurrency(data.currency);
+        if (data.weekStart) setWeekStart(data.weekStart);
+        if (data.timeFormat) setTimeFormat(data.timeFormat);
+        if (data.themeAccent) setThemeAccent(data.themeAccent);
+        if (data.targetSleep) setTargetSleep(data.targetSleep);
+        if (data.bedtimeGoal) setBedtimeGoal(data.bedtimeGoal);
+      }
+    } catch (e) {}
+
     async function loadSettings() {
       try {
         const data = await apiRequest('/settings');
@@ -50,6 +63,7 @@ export default function Settings() {
           if (data.themeAccent) setThemeAccent(data.themeAccent);
           if (data.targetSleep) setTargetSleep(data.targetSleep);
           if (data.bedtimeGoal) setBedtimeGoal(data.bedtimeGoal);
+          try { localStorage.setItem('bts_cached_preferences', JSON.stringify(data)); } catch (e) {}
         }
       } catch (e) {}
     }
@@ -71,19 +85,21 @@ export default function Settings() {
 
   const handleSavePreferences = async (e) => {
     e.preventDefault();
+    const prefs = {
+      currency,
+      weekStart,
+      timeFormat,
+      themeAccent,
+      targetSleep,
+      bedtimeGoal,
+      morningReminder,
+      sundayReminder
+    };
+    try { localStorage.setItem('bts_cached_preferences', JSON.stringify(prefs)); } catch (e) {}
     try {
       await apiRequest('/settings/preferences', {
         method: 'PUT',
-        body: JSON.stringify({
-          currency,
-          weekStart,
-          timeFormat,
-          themeAccent,
-          targetSleep,
-          bedtimeGoal,
-          morningReminder,
-          sundayReminder
-        })
+        body: JSON.stringify(prefs)
       });
     } catch (e) {}
     setSavedStatus('Preferences updated.');

@@ -47,6 +47,20 @@ export async function initDb() {
       console.log(`Database schema verified and applied successfully (${statements.length} statements).`);
     }
 
+    // Ensure meals table has date column and user-date index for rolling calendar
+    try {
+      const tableInfo = await db.execute('PRAGMA table_info(meals)');
+      const hasDateCol = tableInfo.rows.some(r => r.name === 'date');
+      if (!hasDateCol) {
+        await db.execute('ALTER TABLE meals ADD COLUMN date TEXT');
+        console.log('Added date column to meals table.');
+      }
+      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_meals_user_date ON meals(user_id, date)');
+      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_meals_user_day ON meals(user_id, day_of_week)');
+    } catch (migErr) {
+      console.warn('Meals schema migration notice:', migErr.message);
+    }
+
     // Seed default demo profile if empty
     const checkUser = await db.execute({
       sql: 'SELECT id FROM users WHERE id = ?',
@@ -98,10 +112,15 @@ export async function query(sql, params = []) {
   try {
     const db = getClient();
     
+    // Normalize params: convert undefined to null for LibSQL
+    const cleanParams = Array.isArray(params)
+      ? params.map(p => (p === undefined ? null : p))
+      : params;
+
     // Execute query with args
     const result = await db.execute({
       sql,
-      args: params
+      args: cleanParams
     });
 
     // Normalize rows: convert integer boolean fields (completed, is_completed, checked, is_today) to boolean

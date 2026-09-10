@@ -85,7 +85,20 @@ router.get('/outfits', async (req, res) => {
       'SELECT * FROM outfits WHERE user_id = $1 ORDER BY is_today DESC, name ASC',
       [req.user.id]
     );
-    res.json(result.rows);
+    const parsed = result.rows.map(row => {
+      let items = [];
+      if (typeof row.items === 'string') {
+        try { items = JSON.parse(row.items); } catch (e) { items = [row.items]; }
+      } else if (Array.isArray(row.items)) {
+        items = row.items;
+      }
+      return {
+        ...row,
+        items,
+        is_today: Boolean(row.is_today)
+      };
+    });
+    res.json(parsed);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch outfits.' });
   }
@@ -95,12 +108,13 @@ router.get('/outfits', async (req, res) => {
 router.post('/outfits', async (req, res) => {
   try {
     const { name, occasion, items, last_worn, is_today } = req.body;
+    const itemsArray = Array.isArray(items) ? items : (typeof items === 'string' ? JSON.parse(items || '[]') : []);
     const newOutfit = {
       id: req.body.id || crypto.randomUUID(),
       user_id: req.user.id,
       name: name || 'Outfit',
       occasion: occasion || 'Campus',
-      items: JSON.stringify(items || []),
+      items: JSON.stringify(itemsArray),
       last_worn: last_worn || new Date().toISOString().slice(0, 10),
       is_today: is_today || false
     };
@@ -109,9 +123,45 @@ router.post('/outfits', async (req, res) => {
       'INSERT INTO outfits (id, user_id, name, occasion, items, last_worn, is_today) VALUES ($1, $2, $3, $4, $5, $6, $7)',
       [newOutfit.id, newOutfit.user_id, newOutfit.name, newOutfit.occasion, newOutfit.items, newOutfit.last_worn, isTodayVal]
     );
-    res.status(201).json(newOutfit);
+    res.status(201).json({
+      ...newOutfit,
+      items: itemsArray,
+      is_today: Boolean(newOutfit.is_today)
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save outfit.' });
+  }
+});
+
+// PATCH /api/outfits/:id/today
+router.patch('/outfits/:id/today', async (req, res) => {
+  try {
+    const { is_today, last_worn } = req.body;
+    const isTodayVal = is_today ? 1 : 0;
+    // Set all other outfits is_today to 0 if this one is 1
+    if (isTodayVal === 1) {
+      await db.query('UPDATE outfits SET is_today = 0 WHERE user_id = $1', [req.user.id]);
+    }
+    await db.query(
+      'UPDATE outfits SET is_today = $1, last_worn = COALESCE($2, last_worn) WHERE id = $3 AND user_id = $4',
+      [isTodayVal, last_worn || null, req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update outfit status.' });
+  }
+});
+
+// DELETE /api/outfits/:id
+router.delete('/outfits/:id', async (req, res) => {
+  try {
+    await db.query(
+      'DELETE FROM outfits WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete outfit.' });
   }
 });
 

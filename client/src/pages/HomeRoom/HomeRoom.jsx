@@ -35,8 +35,20 @@ const NIGHTLY_RESET_STEPS = [
 ];
 
 export default function HomeRoom() {
-  const [tasks, setTasks] = useState(INITIAL_ROOM_TASKS);
-  const [nightlySteps, setNightlySteps] = useState(NIGHTLY_RESET_STEPS);
+  const [tasks, setTasks] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_hometasks');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return INITIAL_ROOM_TASKS;
+  });
+  const [nightlySteps, setNightlySteps] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_nightly_steps');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return NIGHTLY_RESET_STEPS;
+  });
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'desk', 'bedroom', 'bathroom', 'reset'
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -49,11 +61,12 @@ export default function HomeRoom() {
     async function loadHomeTasks() {
       try {
         const data = await apiRequest('/home-tasks');
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setTasks(data);
+          try { localStorage.setItem('bts_cached_hometasks', JSON.stringify(data)); } catch (e) {}
         }
       } catch (e) {
-        // fallback
+        // fallback / cached data
       }
     }
     loadHomeTasks();
@@ -63,11 +76,13 @@ export default function HomeRoom() {
     const target = tasks.find(t => t.id === id);
     if (!target) return;
     const newStatus = !target.is_completed;
-    setTasks(prev => prev.map(t => t.id === id ? {
+    const updatedTasks = tasks.map(t => t.id === id ? {
       ...t,
       is_completed: newStatus,
       last_cleaned: newStatus ? 'Today' : t.last_cleaned
-    } : t));
+    } : t);
+    setTasks(updatedTasks);
+    try { localStorage.setItem('bts_cached_hometasks', JSON.stringify(updatedTasks)); } catch (e) {}
 
     try {
       await apiRequest(`/home-tasks/${id}/toggle`, {
@@ -90,7 +105,9 @@ export default function HomeRoom() {
       last_cleaned: 'Pending'
     };
 
-    setTasks(prev => [newTask, ...prev]);
+    const updatedTasks = [newTask, ...tasks];
+    setTasks(updatedTasks);
+    try { localStorage.setItem('bts_cached_hometasks', JSON.stringify(updatedTasks)); } catch (e) {}
     try {
       await apiRequest('/home-tasks', {
         method: 'POST',
@@ -103,14 +120,18 @@ export default function HomeRoom() {
   };
 
   const handleDeleteTask = async (id) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+    const updatedTasks = tasks.filter(t => t.id !== id);
+    setTasks(updatedTasks);
+    try { localStorage.setItem('bts_cached_hometasks', JSON.stringify(updatedTasks)); } catch (e) {}
     try {
       await apiRequest(`/home-tasks/${id}`, { method: 'DELETE' });
     } catch (e) {}
   };
 
   const toggleNightlyStep = (id) => {
-    setNightlySteps(prev => prev.map(s => s.id === id ? { ...s, done: !s.done } : s));
+    const updatedSteps = nightlySteps.map(s => s.id === id ? { ...s, done: !s.done } : s);
+    setNightlySteps(updatedSteps);
+    try { localStorage.setItem('bts_cached_nightly_steps', JSON.stringify(updatedSteps)); } catch (e) {}
   };
 
   const filteredTasks = tasks.filter(t => {

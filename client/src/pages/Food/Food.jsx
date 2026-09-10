@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Utensils,
   Calendar,
@@ -10,7 +10,9 @@ import {
   Snowflake,
   ChefHat,
   ArrowRight,
-  ListTodo
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -21,9 +23,7 @@ import Tabs from '../../components/ui/Tabs';
 import EmptyState from '../../components/ui/EmptyState';
 import { apiRequest } from '../../services/api';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-const INITIAL_MEALS = {
+const DEFAULT_WEEKDAY_ROTATION = {
   Monday: { breakfast: 'Overnight oats with chia & berries', lunch: 'Quinoa & sweet potato bowl', dinner: 'Lentil soup with sourdough', snack: 'Apple & almond butter' },
   Tuesday: { breakfast: 'Greek yogurt & homemade granola', lunch: 'Quinoa & sweet potato bowl', dinner: 'Tofu stir fry with brown rice', snack: 'Handful of roasted almonds' },
   Wednesday: { breakfast: 'Overnight oats with chia & berries', lunch: 'Tofu stir fry with brown rice', dinner: 'Chickpea spinach curry', snack: 'Carrot sticks & hummus' },
@@ -48,15 +48,48 @@ const INITIAL_FREEZER = [
   { id: '3', name: 'Prepped Smoothie Fruit Packs', portions: 4, date_frozen: '2026-09-06', notes: 'Blend with oat milk' },
 ];
 
+function formatDateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export default function Food() {
-  const [activeTab, setActiveTab] = useState('plan'); // 'plan', 'saturday', 'sunday', 'shopping', 'freezer'
-  const [mealPlan, setMealPlan] = useState(INITIAL_MEALS);
-  const [shoppingList, setShoppingList] = useState(INITIAL_SHOPPING);
-  const [freezerMeals, setFreezerMeals] = useState(INITIAL_FREEZER);
+  const [activeTab, setActiveTab] = useState('plan'); // 'plan', 'shopping', 'freezer', 'prep'
+
+  // Rolling calendar date window offset from today (in days, multiples of 7 for weeks)
+  const [startOffsetDays, setStartOffsetDays] = useState(0);
+
+  // Cached meal plan dictionary keyed by YYYY-MM-DD
+  const [mealPlan, setMealPlan] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_meals');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return {};
+  });
+
+  const [shoppingList, setShoppingList] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_shopping');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return INITIAL_SHOPPING;
+  });
+
+  const [freezerMeals, setFreezerMeals] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_freezer');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return INITIAL_FREEZER;
+  });
 
   // Modals
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState('Monday');
+  const [selectedDateKey, setSelectedDateKey] = useState('');
+  const [selectedDateFormatted, setSelectedDateFormatted] = useState('');
   const [editMealType, setEditMealType] = useState('breakfast');
   const [mealText, setMealText] = useState('');
 
@@ -65,23 +98,36 @@ export default function Food() {
   const [newItemCat, setNewItemCat] = useState('Produce');
 
   // Saturday Workflow Checklist
-  const [saturdaySteps, setSaturdaySteps] = useState([
-    { id: 1, text: 'Audit fridge, pantry, and produce before grocery shopping', done: true },
-    { id: 2, text: 'Select 3 core weekday batch recipes (1 grain bowl, 1 soup/stew, 1 quick protein)', done: true },
-    { id: 3, text: 'Add missing staple ingredients to the Sunday Shopping List', done: false },
-    { id: 4, text: 'Review school exam schedule to ensure meals match busy evenings', done: false },
-  ]);
+  const [saturdaySteps, setSaturdaySteps] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_saturday_steps');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [
+      { id: 1, text: 'Audit fridge, pantry, and produce before grocery shopping', done: true },
+      { id: 2, text: 'Select 3 core weekday batch recipes (1 grain bowl, 1 soup/stew, 1 quick protein)', done: true },
+      { id: 3, text: 'Add missing staple ingredients to the Sunday Shopping List', done: false },
+      { id: 4, text: 'Review school exam schedule to ensure meals match busy evenings', done: false },
+    ];
+  });
 
   // Sunday Meal Prep Checklist
-  const [sundaySteps, setSundaySteps] = useState([
-    { id: 1, text: 'Cook grain base in batch (Quinoa / Brown Rice / Farro)', done: false },
-    { id: 2, text: 'Roast sheet-pan vegetables (Sweet potatoes, broccoli, peppers)', done: false },
-    { id: 3, text: 'Simmer weekday soup or batch curry (Lentils or Chili)', done: false },
-    { id: 4, text: 'Pre-portion overnight oats jars for Monday through Thursday', done: true },
-    { id: 5, text: 'Wash, dry, and spin salad greens; store with dry cloth', done: false },
-    { id: 6, text: 'Label and freeze 2 portions for emergency study nights', done: false },
-  ]);
+  const [sundaySteps, setSundaySteps] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_sunday_steps');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [
+      { id: 1, text: 'Cook grain base in batch (Quinoa / Brown Rice / Farro)', done: false },
+      { id: 2, text: 'Roast sheet-pan vegetables (Sweet potatoes, broccoli, peppers)', done: false },
+      { id: 3, text: 'Simmer weekday soup or batch curry (Lentils or Chili)', done: false },
+      { id: 4, text: 'Pre-portion overnight oats jars for Monday through Thursday', done: true },
+      { id: 5, text: 'Wash, dry, and spin salad greens; store with dry cloth', done: false },
+      { id: 6, text: 'Label and freeze 2 portions for emergency study nights', done: false },
+    ];
+  });
 
+  // Load from API on mount
   useEffect(() => {
     async function loadFoodData() {
       try {
@@ -90,29 +136,129 @@ export default function Food() {
           apiRequest('/shopping-list'),
           apiRequest('/freezer-meals')
         ]);
-        if (mealsRes && typeof mealsRes === 'object') setMealPlan(mealsRes);
-        if (Array.isArray(shopRes)) setShoppingList(shopRes);
-        if (Array.isArray(freezerRes)) setFreezerMeals(freezerRes);
+        if (mealsRes && typeof mealsRes === 'object') {
+          setMealPlan(prev => {
+            const merged = { ...prev, ...mealsRes };
+            try { localStorage.setItem('bts_cached_meals', JSON.stringify(merged)); } catch (e) {}
+            return merged;
+          });
+        }
+        if (Array.isArray(shopRes)) {
+          setShoppingList(shopRes);
+          try { localStorage.setItem('bts_cached_shopping', JSON.stringify(shopRes)); } catch (e) {}
+        }
+        if (Array.isArray(freezerRes)) {
+          setFreezerMeals(freezerRes);
+          try { localStorage.setItem('bts_cached_freezer', JSON.stringify(freezerRes)); } catch (e) {}
+        }
       } catch (e) {
-        // use initial demo data
+        // use cached data
       }
     }
     loadFoodData();
   }, []);
 
+  // Compute the 7-day rolling window starting at today + startOffsetDays
+  const rollingDays = useMemo(() => {
+    const today = new Date();
+    // Normalize to midnight
+    const base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    base.setDate(base.getDate() + startOffsetDays);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const dateKey = formatDateKey(d);
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+      const formattedTitle = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+      const isToday = dateKey === formatDateKey(today);
+
+      days.push({
+        dateObj: d,
+        dateKey,
+        dayName,
+        formattedTitle,
+        isToday,
+      });
+    }
+    return days;
+  }, [startOffsetDays]);
+
+  const windowLabel = useMemo(() => {
+    if (rollingDays.length < 7) return '';
+    const first = rollingDays[0];
+    const last = rollingDays[6];
+    const firstStr = first.isToday ? 'Today' : first.dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const lastStr = last.dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${firstStr} – ${lastStr}`;
+  }, [rollingDays]);
+
+  // Open modal to edit specific date and meal type
+  const openEditMeal = (dayObj, type) => {
+    setSelectedDateKey(dayObj.dateKey);
+    setSelectedDateFormatted(dayObj.formattedTitle);
+    setEditMealType(type);
+
+    // Get current text for dateKey, or fallback to day-of-week rotation idea
+    const dayMeals = mealPlan[dayObj.dateKey] || {};
+    const fallbackIdea = DEFAULT_WEEKDAY_ROTATION[dayObj.dayName]?.[type] || '';
+    setMealText(dayMeals[type] !== undefined ? dayMeals[type] : fallbackIdea);
+    setIsMealModalOpen(true);
+  };
+
+  const saveMeal = async (e) => {
+    e.preventDefault();
+    if (!selectedDateKey) return;
+
+    const currentDayMeals = mealPlan[selectedDateKey] || {};
+    const updatedDayMeals = {
+      ...currentDayMeals,
+      [editMealType]: mealText.trim()
+    };
+
+    const updatedPlan = {
+      ...mealPlan,
+      [selectedDateKey]: updatedDayMeals
+    };
+
+    setMealPlan(updatedPlan);
+    try { localStorage.setItem('bts_cached_meals', JSON.stringify(updatedPlan)); } catch (err) {}
+
+    try {
+      await apiRequest('/meals', {
+        method: 'PUT',
+        body: JSON.stringify({
+          date: selectedDateKey,
+          ...updatedDayMeals
+        })
+      });
+    } catch (err) {
+      console.warn('Saved locally');
+    }
+
+    setIsMealModalOpen(false);
+  };
+
   const toggleSaturdayStep = (id) => {
-    setSaturdaySteps(prev => prev.map(s => s.id === id ? { ...s, done: !s.done } : s));
+    const updated = saturdaySteps.map(s => s.id === id ? { ...s, done: !s.done } : s);
+    setSaturdaySteps(updated);
+    try { localStorage.setItem('bts_cached_saturday_steps', JSON.stringify(updated)); } catch (e) {}
   };
 
   const toggleSundayStep = (id) => {
-    setSundaySteps(prev => prev.map(s => s.id === id ? { ...s, done: !s.done } : s));
+    const updated = sundaySteps.map(s => s.id === id ? { ...s, done: !s.done } : s);
+    setSundaySteps(updated);
+    try { localStorage.setItem('bts_cached_sunday_steps', JSON.stringify(updated)); } catch (e) {}
   };
 
   const toggleShoppingItem = async (id) => {
     const target = shoppingList.find(i => i.id === id);
     if (!target) return;
     const newChecked = !target.checked;
-    setShoppingList(prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i));
+    const updated = shoppingList.map(i => i.id === id ? { ...i, checked: newChecked } : i);
+    setShoppingList(updated);
+    try { localStorage.setItem('bts_cached_shopping', JSON.stringify(updated)); } catch (e) {}
     try {
       await apiRequest(`/shopping-list/${id}/toggle`, {
         method: 'PATCH',
@@ -130,7 +276,9 @@ export default function Food() {
       category: newItemCat,
       checked: false
     };
-    setShoppingList(prev => [...prev, newItem]);
+    const updated = [...shoppingList, newItem];
+    setShoppingList(updated);
+    try { localStorage.setItem('bts_cached_shopping', JSON.stringify(updated)); } catch (e) {}
     try {
       await apiRequest('/shopping-list', {
         method: 'POST',
@@ -142,44 +290,19 @@ export default function Food() {
   };
 
   const deleteShoppingItem = async (id) => {
-    setShoppingList(prev => prev.filter(i => i.id !== id));
+    const updated = shoppingList.filter(i => i.id !== id);
+    setShoppingList(updated);
+    try { localStorage.setItem('bts_cached_shopping', JSON.stringify(updated)); } catch (e) {}
     try {
       await apiRequest(`/shopping-list/${id}`, { method: 'DELETE' });
     } catch (e) {}
   };
 
-  const openEditMeal = (day, type) => {
-    setSelectedDay(day);
-    setEditMealType(type);
-    setMealText(mealPlan[day]?.[type] || '');
-    setIsMealModalOpen(true);
-  };
-
-  const saveMeal = async (e) => {
-    e.preventDefault();
-    const updated = {
-      ...mealPlan,
-      [selectedDay]: {
-        ...mealPlan[selectedDay],
-        [editMealType]: mealText
-      }
-    };
-    setMealPlan(updated);
-    try {
-      await apiRequest('/meals', {
-        method: 'PUT',
-        body: JSON.stringify(updated)
-      });
-    } catch (e) {}
-    setIsMealModalOpen(false);
-  };
-
   const tabs = [
-    { id: 'plan', label: 'Weekly Meal Plan', icon: Calendar },
-    { id: 'saturday', label: 'Saturday Planning Workflow', icon: BookOpen },
-    { id: 'sunday', label: 'Sunday Meal Prep', icon: ChefHat },
+    { id: 'plan', label: '7-Day Meal Calendar', icon: Calendar },
     { id: 'shopping', label: 'Shopping List', icon: ShoppingBag, badge: shoppingList.filter(i => !i.checked).length },
     { id: 'freezer', label: 'Freezer Meals', icon: Snowflake, badge: freezerMeals.length },
+    { id: 'prep', label: 'Prep Rituals', icon: ChefHat },
   ];
 
   return (
@@ -187,269 +310,205 @@ export default function Food() {
       {/* Header */}
       <div className="page-header">
         <div className="page-title-group">
-          <h1>Food & Meal Prep</h1>
-          <p>Nourishing, stress-free weekday eating designed around Saturday planning & Sunday prep.</p>
+          <h1>Meal Calendar & Nutrition</h1>
+          <p>Rolling date-based meal planner covering the entire school year.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Button variant="secondary" onClick={() => setActiveTab('saturday')}>
-            Saturday Workflow
-          </Button>
-          <Button variant="primary" icon={ChefHat} onClick={() => setActiveTab('sunday')}>
-            Sunday Prep
-          </Button>
-        </div>
-      </div>
-
-      {/* Prominent Workflow Notice Cards */}
-      <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
-        {/* Saturday Workflow Callout */}
-        <div
-          onClick={() => setActiveTab('saturday')}
-          style={{
-            padding: '1.125rem',
-            background: 'var(--accent-amber-light)',
-            border: '1px solid #EADBCE',
-            borderRadius: 'var(--radius-md)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 'var(--radius-sm)',
-                background: '#FFFFFF',
-                color: 'var(--accent-amber)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
+          {startOffsetDays !== 0 && (
+            <Button
+              variant="secondary"
+              icon={RotateCcw}
+              size="sm"
+              onClick={() => setStartOffsetDays(0)}
             >
-              <Calendar size={18} />
-            </div>
-            <div>
-              <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>Saturday Planning Workflow</h4>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                {saturdaySteps.filter(s => s.done).length} of {saturdaySteps.length} planning steps ready
-              </p>
-            </div>
-          </div>
-          <ArrowRight size={16} color="var(--accent-amber)" />
-        </div>
-
-        {/* Sunday Meal Prep Callout */}
-        <div
-          onClick={() => setActiveTab('sunday')}
-          style={{
-            padding: '1.125rem',
-            background: 'var(--accent-sage-light)',
-            border: '1px solid #D8E5DD',
-            borderRadius: 'var(--radius-md)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 'var(--radius-sm)',
-                background: '#FFFFFF',
-                color: 'var(--accent-sage)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <ChefHat size={18} />
-            </div>
-            <div>
-              <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>Sunday Batch Prep Routine</h4>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                {sundaySteps.filter(s => s.done).length} of {sundaySteps.length} cooking stages complete
-              </p>
-            </div>
-          </div>
-          <ArrowRight size={16} color="var(--accent-sage)" />
+              Today's View
+            </Button>
+          )}
+          <Button variant="primary" icon={Plus} size="sm" onClick={() => setIsShoppingModalOpen(true)}>
+            Add Grocery Item
+          </Button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ marginBottom: '1.5rem' }}>
+      <div style={{ marginBottom: '1.25rem' }}>
         <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
       </div>
 
-      {/* TAB 1: WEEKLY MEAL PLAN */}
+      {/* TAB 1: ROLLING 7-DAY MEAL CALENDAR */}
       {activeTab === 'plan' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {DAYS.map((day) => {
-            const meals = mealPlan[day] || {};
-            return (
-              <Card key={day} style={{ padding: '1.25rem' }}>
-                <div className="flex-between" style={{ marginBottom: '0.75rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <h3 style={{ fontSize: '1.05rem', color: 'var(--text-primary)' }}>{day}</h3>
-                  <Badge variant={day === 'Saturday' ? 'amber' : day === 'Sunday' ? 'sage' : 'subtle'}>
-                    {day === 'Saturday' ? 'Planning Day' : day === 'Sunday' ? 'Meal Prep Day' : 'Weekday Routine'}
-                  </Badge>
-                </div>
+        <div>
+          {/* Calendar Navigation Toolbar */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '1.25rem',
+              flexWrap: 'wrap',
+              gap: '0.75rem'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={() => setStartOffsetDays(prev => prev - 7)}
+                title="Previous 7 Days"
+              >
+                <ChevronLeft size={16} />
+              </Button>
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={() => setStartOffsetDays(prev => prev + 7)}
+                title="Next 7 Days"
+              >
+                <ChevronRight size={16} />
+              </Button>
+              <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', marginLeft: '0.25rem' }}>
+                {windowLabel}
+              </span>
+            </div>
 
-                <div className="grid-2" style={{ gap: '0.75rem' }}>
-                  {['breakfast', 'lunch', 'dinner', 'snack'].map((type) => (
-                    <div
-                      key={type}
-                      onClick={() => openEditMeal(day, type)}
-                      style={{
-                        padding: '0.65rem 0.75rem',
-                        borderRadius: 'var(--radius-sm)',
-                        background: 'var(--bg-card-subtle)',
-                        border: '1px solid var(--border-subtle)',
-                        cursor: 'pointer',
-                        transition: 'all var(--transition-fast)'
-                      }}
-                    >
-                      <div className="flex-between">
-                        <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
-                          {type}
-                        </span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--accent-sage)' }}>Edit</span>
-                      </div>
-                      <p style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)', marginTop: '2px' }}>
-                        {meals[type] || 'Click to set meal...'}
-                      </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {startOffsetDays !== 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStartOffsetDays(0)}
+                  style={{ color: 'var(--accent-sage)', fontWeight: 600 }}
+                >
+                  Jump to Today
+                </Button>
+              )}
+              {/* Optional jump to specific date */}
+              <input
+                type="date"
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const picked = new Date(e.target.value + 'T00:00:00');
+                  const today = new Date();
+                  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  const diffDays = Math.round((picked - todayMidnight) / (1000 * 60 * 60 * 24));
+                  setStartOffsetDays(diffDays);
+                }}
+                style={{
+                  fontSize: '0.78rem',
+                  padding: '0.35rem 0.6rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-card-subtle)',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer'
+                }}
+                title="Jump to date in calendar"
+              />
+            </div>
+          </div>
+
+          {/* 7-Day Rolling Day Cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {rollingDays.map((dayObj) => {
+              const dateKey = dayObj.dateKey;
+              const dayMeals = mealPlan[dateKey] || {};
+              const defaultIdea = DEFAULT_WEEKDAY_ROTATION[dayObj.dayName] || {};
+
+              return (
+                <Card
+                  key={dateKey}
+                  style={{
+                    padding: '1.25rem',
+                    border: dayObj.isToday ? '2px solid var(--accent-sage)' : '1px solid var(--border-color)',
+                    background: dayObj.isToday ? 'var(--bg-card)' : 'var(--bg-card)',
+                    position: 'relative'
+                  }}
+                >
+                  <div
+                    className="flex-between"
+                    style={{
+                      marginBottom: '0.85rem',
+                      paddingBottom: '0.6rem',
+                      borderBottom: '1px solid var(--border-subtle)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <h3 style={{ fontSize: '1.05rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                        {dayObj.formattedTitle}
+                      </h3>
+                      {dayObj.isToday && (
+                        <Badge variant="sage">Today</Badge>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </Card>
-            );
-          })}
+
+                    <Badge variant={dayObj.dayName === 'Saturday' || dayObj.dayName === 'Sunday' ? 'amber' : 'subtle'}>
+                      {dayObj.dayName === 'Saturday' || dayObj.dayName === 'Sunday' ? 'Weekend Prep' : 'Weekday'}
+                    </Badge>
+                  </div>
+
+                  {/* 4 Meal Slots: Breakfast, Lunch, Dinner, Snack */}
+                  <div className="grid-2" style={{ gap: '0.75rem' }}>
+                    {['breakfast', 'lunch', 'dinner', 'snack'].map((type) => {
+                      const mealValue = dayMeals[type] !== undefined && dayMeals[type] !== ''
+                        ? dayMeals[type]
+                        : (defaultIdea[type] || '');
+
+                      const isCustom = dayMeals[type] !== undefined && dayMeals[type] !== '';
+
+                      return (
+                        <div
+                          key={type}
+                          onClick={() => openEditMeal(dayObj, type)}
+                          style={{
+                            padding: '0.7rem 0.85rem',
+                            borderRadius: 'var(--radius-sm)',
+                            background: isCustom ? 'var(--bg-card)' : 'var(--bg-card-subtle)',
+                            border: isCustom ? '1px solid var(--accent-sage)' : '1px solid var(--border-subtle)',
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-fast)'
+                          }}
+                        >
+                          <div className="flex-between">
+                            <span
+                              style={{
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                textTransform: 'uppercase',
+                                color: isCustom ? 'var(--accent-sage)' : 'var(--text-secondary)'
+                              }}
+                            >
+                              {type}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--accent-sage)', fontWeight: 500 }}>
+                              Edit
+                            </span>
+                          </div>
+                          <p
+                            style={{
+                              fontSize: '0.85rem',
+                              fontWeight: 500,
+                              color: mealValue ? 'var(--text-primary)' : 'var(--text-muted)',
+                              marginTop: '3px'
+                            }}
+                          >
+                            {mealValue || 'Click to set meal...'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* TAB 2: SATURDAY PLANNING WORKFLOW */}
-      {activeTab === 'saturday' && (
-        <Card
-          title="Saturday Planning Ritual"
-          subtitle="Set aside 15 minutes each Saturday morning to plan nourishing weekday meals and avoid decision fatigue."
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-            {saturdaySteps.map((step, idx) => (
-              <label
-                key={step.id}
-                onClick={() => toggleSaturdayStep(step.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.75rem',
-                  padding: '0.875rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-subtle)',
-                  background: step.done ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
-                  cursor: 'pointer',
-                  transition: 'background var(--transition-fast)'
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={step.done}
-                  onChange={() => {}}
-                  style={{ marginTop: '2px', accentColor: 'var(--accent-amber)' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-amber)' }}>
-                    STEP {idx + 1}
-                  </div>
-                  <p style={{
-                    fontSize: '0.875rem',
-                    color: 'var(--text-primary)',
-                    textDecoration: step.done ? 'line-through' : 'none',
-                    opacity: step.done ? 0.7 : 1,
-                    marginTop: '2px'
-                  }}>
-                    {step.text}
-                  </p>
-                </div>
-              </label>
-            ))}
-          </div>
-
-          <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setActiveTab('shopping')}>
-              Open Shopping List
-            </Button>
-            <Button variant="primary" onClick={() => setActiveTab('plan')}>
-              View Meal Calendar
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* TAB 3: SUNDAY MEAL PREP WORKFLOW */}
-      {activeTab === 'sunday' && (
-        <Card
-          title="Sunday Batch Preparation Routine"
-          subtitle="Spend 90 minutes on Sunday afternoon cooking 3 foundation bases to fuel your entire school week."
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-            {sundaySteps.map((step, idx) => (
-              <label
-                key={step.id}
-                onClick={() => toggleSundayStep(step.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.75rem',
-                  padding: '0.875rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-subtle)',
-                  background: step.done ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
-                  cursor: 'pointer'
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={step.done}
-                  onChange={() => {}}
-                  style={{ marginTop: '2px', accentColor: 'var(--accent-sage)' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-sage)' }}>
-                    BATCH STAGE {idx + 1}
-                  </div>
-                  <p style={{
-                    fontSize: '0.875rem',
-                    color: 'var(--text-primary)',
-                    textDecoration: step.done ? 'line-through' : 'none',
-                    opacity: step.done ? 0.7 : 1,
-                    marginTop: '2px'
-                  }}>
-                    {step.text}
-                  </p>
-                </div>
-              </label>
-            ))}
-          </div>
-
-          <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setActiveTab('freezer')}>
-              Log Freezer Portions
-            </Button>
-            <Button variant="primary" onClick={() => setActiveTab('plan')}>
-              Done with Sunday Prep
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* TAB 4: SHOPPING LIST */}
+      {/* TAB 2: SHOPPING LIST */}
       {activeTab === 'shopping' && (
         <Card
           title="Weekly Groceries & Market List"
@@ -460,47 +519,60 @@ export default function Food() {
             </Button>
           }
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {shoppingList.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-subtle)',
-                  background: item.checked ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
-                  opacity: item.checked ? 0.6 : 1
-                }}
-              >
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', flex: 1 }}>
-                  <input
-                    type="checkbox"
-                    checked={item.checked}
-                    onChange={() => toggleShoppingItem(item.id)}
-                    style={{ accentColor: 'var(--accent-sage)' }}
-                  />
-                  <div>
-                    <span style={{ fontSize: '0.875rem', fontWeight: 500, textDecoration: item.checked ? 'line-through' : 'none' }}>
-                      {item.item}
-                    </span>
-                    <Badge variant="subtle" style={{ marginLeft: '0.5rem' }}>
-                      {item.category}
-                    </Badge>
-                  </div>
-                </label>
-                <Button variant="ghost" size="icon" onClick={() => deleteShoppingItem(item.id)}>
-                  <Trash2 size={15} />
+          {shoppingList.length === 0 ? (
+            <EmptyState
+              icon={ShoppingBag}
+              title="Shopping list is empty"
+              description="Add pantry staples, vegetables, or proteins for the week."
+              action={
+                <Button variant="secondary" icon={Plus} size="sm" onClick={() => setIsShoppingModalOpen(true)}>
+                  Add Item
                 </Button>
-              </div>
-            ))}
-          </div>
+              }
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {shoppingList.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.75rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    background: item.checked ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
+                    opacity: item.checked ? 0.6 : 1
+                  }}
+                >
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', flex: 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={() => toggleShoppingItem(item.id)}
+                      style={{ accentColor: 'var(--accent-sage)' }}
+                    />
+                    <div>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 500, textDecoration: item.checked ? 'line-through' : 'none' }}>
+                        {item.item}
+                      </span>
+                      <Badge variant="subtle" style={{ marginLeft: '0.5rem' }}>
+                        {item.category}
+                      </Badge>
+                    </div>
+                  </label>
+                  <Button variant="ghost" size="icon" onClick={() => deleteShoppingItem(item.id)}>
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
-      {/* TAB 5: FREEZER MEALS */}
+      {/* TAB 3: FREEZER MEALS */}
       {activeTab === 'freezer' && (
         <Card
           title="Freezer Meal Reserves"
@@ -538,11 +610,14 @@ export default function Food() {
                     variant="secondary"
                     size="sm"
                     onClick={() => {
+                      let updated;
                       if (meal.portions > 1) {
-                        setFreezerMeals(prev => prev.map(m => m.id === meal.id ? { ...m, portions: m.portions - 1 } : m));
+                        updated = freezerMeals.map(m => m.id === meal.id ? { ...m, portions: m.portions - 1 } : m);
                       } else {
-                        setFreezerMeals(prev => prev.filter(m => m.id !== meal.id));
+                        updated = freezerMeals.filter(m => m.id !== meal.id);
                       }
+                      setFreezerMeals(updated);
+                      try { localStorage.setItem('bts_cached_freezer', JSON.stringify(updated)); } catch (e) {}
                     }}
                   >
                     Defrost 1 Portion
@@ -554,28 +629,135 @@ export default function Food() {
         </Card>
       )}
 
+      {/* TAB 4: PREP RITUALS (Saturday Planning & Sunday Meal Prep Checklists) */}
+      {activeTab === 'prep' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Saturday Planning Workflow */}
+          <Card
+            title="Saturday Planning Ritual"
+            subtitle="Set aside 15 minutes each Saturday to audit supplies and choose nourishing weekday recipes."
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {saturdaySteps.map((step, idx) => (
+                <label
+                  key={step.id}
+                  onClick={() => toggleSaturdayStep(step.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.75rem',
+                    padding: '0.875rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    background: step.done ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={step.done}
+                    onChange={() => {}}
+                    style={{ marginTop: '2px', accentColor: 'var(--accent-amber)' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-amber)' }}>
+                      STEP {idx + 1}
+                    </div>
+                    <p style={{
+                      fontSize: '0.875rem',
+                      color: 'var(--text-primary)',
+                      textDecoration: step.done ? 'line-through' : 'none',
+                      opacity: step.done ? 0.7 : 1,
+                      marginTop: '2px'
+                    }}>
+                      {step.text}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </Card>
+
+          {/* Sunday Batch Preparation Routine */}
+          <Card
+            title="Sunday Batch Preparation Routine"
+            subtitle="Spend 90 minutes cooking 3 foundation bases to fuel your entire school week."
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {sundaySteps.map((step, idx) => (
+                <label
+                  key={step.id}
+                  onClick={() => toggleSundayStep(step.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.75rem',
+                    padding: '0.875rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    background: step.done ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={step.done}
+                    onChange={() => {}}
+                    style={{ marginTop: '2px', accentColor: 'var(--accent-sage)' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-sage)' }}>
+                      BATCH STAGE {idx + 1}
+                    </div>
+                    <p style={{
+                      fontSize: '0.875rem',
+                      color: 'var(--text-primary)',
+                      textDecoration: step.done ? 'line-through' : 'none',
+                      opacity: step.done ? 0.7 : 1,
+                      marginTop: '2px'
+                    }}>
+                      {step.text}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Edit Meal Modal */}
       <Modal
         isOpen={isMealModalOpen}
         onClose={() => setIsMealModalOpen(false)}
-        title={`Edit ${selectedDay} ${editMealType.charAt(0).toUpperCase() + editMealType.slice(1)}`}
+        title={`Edit Meal · ${selectedDateFormatted} (${editMealType.charAt(0).toUpperCase() + editMealType.slice(1)})`}
       >
         <form onSubmit={saveMeal}>
           <Input
-            label="Meal Description"
+            label={`${editMealType.charAt(0).toUpperCase() + editMealType.slice(1)} Description`}
             value={mealText}
             onChange={(e) => setMealText(e.target.value)}
             placeholder="e.g. Warm lentil soup & sourdough bread"
-            required
             autoFocus
           />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
-            <Button variant="secondary" onClick={() => setIsMealModalOpen(false)}>
-              Cancel
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
+            <Button
+              variant="ghost"
+              type="button"
+              size="sm"
+              onClick={() => setMealText('')}
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Clear
             </Button>
-            <Button variant="primary" type="submit">
-              Save Meal
-            </Button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <Button variant="secondary" onClick={() => setIsMealModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit">
+                Save Meal
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>

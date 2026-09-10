@@ -11,21 +11,32 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 // GET /api/meals
 router.get('/meals', async (req, res) => {
   try {
-    const result = await db.query(
-      'SELECT day_of_week, breakfast, lunch, dinner, snack FROM meals WHERE user_id = $1',
-      [req.user.id]
-    );
+    const { startDate, endDate } = req.query;
+    let sql = 'SELECT id, date, day_of_week, breakfast, lunch, dinner, snack FROM meals WHERE user_id = $1';
+    const params = [req.user.id];
+
+    if (startDate && endDate) {
+      sql += ' AND date >= $2 AND date <= $3';
+      params.push(startDate, endDate);
+    }
+
+    sql += ' ORDER BY date ASC';
+    const result = await db.query(sql, params);
+
     const mealMap = {};
-    DAYS.forEach(day => {
-      mealMap[day] = { breakfast: '', lunch: '', dinner: '', snack: '' };
-    });
     result.rows.forEach(row => {
-      mealMap[row.day_of_week] = {
+      const item = {
         breakfast: row.breakfast || '',
         lunch: row.lunch || '',
         dinner: row.dinner || '',
         snack: row.snack || ''
       };
+      if (row.date) {
+        mealMap[row.date] = item;
+      }
+      if (row.day_of_week) {
+        mealMap[row.day_of_week] = item;
+      }
     });
     res.json(mealMap);
   } catch (err) {
@@ -33,26 +44,79 @@ router.get('/meals', async (req, res) => {
   }
 });
 
+// Helper to upsert a single date's meal
+async function upsertDateMeal(userId, date, item) {
+  const dateObj = new Date(date + 'T12:00:00Z');
+  const dayName = DAYS[dateObj.getUTCDay() === 0 ? 6 : dateObj.getUTCDay() - 1] || 'Weekday';
+  const id = crypto.randomUUID();
+
+  await db.query(
+    `INSERT INTO meals (id, user_id, date, day_of_week, breakfast, lunch, dinner, snack)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (user_id, date) DO UPDATE SET
+       breakfast = EXCLUDED.breakfast,
+       lunch = EXCLUDED.lunch,
+       dinner = EXCLUDED.dinner,
+       snack = EXCLUDED.snack,
+       day_of_week = EXCLUDED.day_of_week`,
+    [id, userId, date, dayName, item.breakfast || '', item.lunch || '', item.dinner || '', item.snack || '']
+  );
+}
+
 // PUT /api/meals
 router.put('/meals', async (req, res) => {
   try {
-    const mealPlan = req.body;
-    for (const day of Object.keys(mealPlan)) {
-      const item = mealPlan[day];
-      await db.query(
-        `INSERT INTO meals (id, user_id, day_of_week, breakfast, lunch, dinner, snack)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (user_id, day_of_week) DO UPDATE
-         SET breakfast = EXCLUDED.breakfast,
-             lunch = EXCLUDED.lunch,
-             dinner = EXCLUDED.dinner,
-             snack = EXCLUDED.snack`,
-        [crypto.randomUUID(), req.user.id, day, item.breakfast, item.lunch, item.dinner, item.snack]
-      );
+    const payload = req.body;
+
+    // Single date object: { date: 'YYYY-MM-DD', breakfast, lunch, dinner, snack }
+    if (payload.date) {
+      await upsertDateMeal(req.user.id, payload.date, payload);
+      return res.json({ success: true, date: payload.date });
+    }
+
+    // Dictionary format: { '2026-09-11': { ... }, ... }
+    for (const key of Object.keys(payload)) {
+      const item = payload[key];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+        await upsertDateMeal(req.user.id, key, item);
+      } else {
+        // Fallback for legacy day of week
+        await db.query(
+          `INSERT INTO meals (id, user_id, day_of_week, breakfast, lunch, dinner, snack)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (user_id, day_of_week) DO UPDATE
+           SET breakfast = EXCLUDED.breakfast,
+               lunch = EXCLUDED.lunch,
+               dinner = EXCLUDED.dinner,
+               snack = EXCLUDED.snack`,
+          [crypto.randomUUID(), req.user.id, key, item.breakfast || '', item.lunch || '', item.dinner || '', item.snack || '']
+        );
+      }
     }
     res.json({ success: true });
   } catch (err) {
+    console.error('Error saving meals:', err);
     res.status(500).json({ error: 'Failed to save meal plan.' });
+  }
+});
+
+// PUT /api/meals/:date
+router.put('/meals/:date', async (req, res) => {
+  try {
+    await upsertDateMeal(req.user.id, req.params.date, req.body);
+    res.json({ success: true, date: req.params.date });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save date meal.' });
+  }
+});
+
+// DELETE /api/meals/:date
+router.delete('/meals/:date', async (req, res) => {
+  try {
+    await db.query('DELETE FROM meals WHERE user_id = $1 AND date = $2', [req.user.id, req.params.date]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete meal.' });
   }
 });
 

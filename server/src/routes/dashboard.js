@@ -13,6 +13,7 @@ router.get('/', async (req, res) => {
     const userId = req.user.id;
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
+    const localStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const dayName = DAYS[today.getDay()];
 
     // Parallel fetch for speed
@@ -20,7 +21,7 @@ router.get('/', async (req, res) => {
       db.query('SELECT * FROM tasks WHERE user_id = $1 ORDER BY completed ASC, due_date ASC LIMIT 5', [userId]),
       db.query('SELECT * FROM budgets WHERE user_id = $1', [userId]),
       db.query('SELECT amount, category, date FROM expenses WHERE user_id = $1', [userId]),
-      db.query('SELECT * FROM meals WHERE user_id = $1 AND day_of_week = $2', [userId, dayName]),
+      db.query('SELECT * FROM meals WHERE user_id = $1 AND (date = $2 OR date = $3 OR (day_of_week = $4 AND date IS NULL)) ORDER BY date DESC LIMIT 1', [userId, todayStr, localStr, dayName]),
       db.query('SELECT * FROM sleep_records WHERE user_id = $1 ORDER BY date DESC LIMIT 1', [userId]),
       db.query('SELECT * FROM outfits WHERE user_id = $1 AND is_today = true LIMIT 1', [userId]),
       db.query('SELECT * FROM home_tasks WHERE user_id = $1 LIMIT 4', [userId])
@@ -29,7 +30,7 @@ router.get('/', async (req, res) => {
     // Compute budget & spending
     const budgetConfig = budgetRes.rows[0] || { daily: 20, weekly: 125, monthly: 500, snack_weekly: 30 };
     const expenses = expensesRes.rows || [];
-    const todayExpenses = expenses.filter(e => e.date === todayStr);
+    const todayExpenses = expenses.filter(e => e.date === todayStr || e.date === localStr);
     const dailySpent = todayExpenses.reduce((acc, curr) => acc + Number(curr.amount), 0);
     const weeklySpent = expenses.reduce((acc, curr) => acc + Number(curr.amount), 0);
 

@@ -29,14 +29,26 @@ const INITIAL_EXPENSES = [
 ];
 
 export default function Budget() {
-  const [budgetLimits, setBudgetLimits] = useState({
-    monthly: 500.00,
-    weekly: 125.00,
-    daily: 20.00,
-    snackWeekly: 30.00,
+  const [budgetLimits, setBudgetLimits] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_budget');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return {
+      monthly: 500.00,
+      weekly: 125.00,
+      daily: 20.00,
+      snackWeekly: 30.00,
+    };
   });
 
-  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
+  const [expenses, setExpenses] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_expenses');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return INITIAL_EXPENSES;
+  });
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
 
@@ -53,10 +65,16 @@ export default function Budget() {
           apiRequest('/budget'),
           apiRequest('/expenses')
         ]);
-        if (limitsRes && limitsRes.monthly) setBudgetLimits(limitsRes);
-        if (Array.isArray(expensesRes)) setExpenses(expensesRes);
+        if (limitsRes && limitsRes.monthly) {
+          setBudgetLimits(limitsRes);
+          try { localStorage.setItem('bts_cached_budget', JSON.stringify(limitsRes)); } catch (e) {}
+        }
+        if (Array.isArray(expensesRes)) {
+          setExpenses(expensesRes);
+          try { localStorage.setItem('bts_cached_expenses', JSON.stringify(expensesRes)); } catch (e) {}
+        }
       } catch (e) {
-        // use fallback
+        // use fallback / cached data
       }
     }
     loadBudgetData();
@@ -76,7 +94,9 @@ export default function Budget() {
       created_at: new Date().toISOString()
     };
 
-    setExpenses(prev => [newExpense, ...prev]);
+    const updatedExpenses = [newExpense, ...expenses];
+    setExpenses(updatedExpenses);
+    try { localStorage.setItem('bts_cached_expenses', JSON.stringify(updatedExpenses)); } catch (e) {}
     try {
       await apiRequest('/expenses', {
         method: 'POST',
@@ -92,7 +112,9 @@ export default function Budget() {
   };
 
   const handleDeleteExpense = async (id) => {
-    setExpenses(prev => prev.filter(e => e.id !== id));
+    const updatedExpenses = expenses.filter(e => e.id !== id);
+    setExpenses(updatedExpenses);
+    try { localStorage.setItem('bts_cached_expenses', JSON.stringify(updatedExpenses)); } catch (e) {}
     try {
       await apiRequest(`/expenses/${id}`, { method: 'DELETE' });
     } catch (err) {}
@@ -354,6 +376,7 @@ export default function Budget() {
         <form onSubmit={(e) => {
           e.preventDefault();
           setIsLimitModalOpen(false);
+          try { localStorage.setItem('bts_cached_budget', JSON.stringify(budgetLimits)); } catch (err) {}
           apiRequest('/budget', {
             method: 'PUT',
             body: JSON.stringify(budgetLimits)

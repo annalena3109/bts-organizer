@@ -50,8 +50,20 @@ const INITIAL_OUTFITS = [
 
 export default function Outfits() {
   const [activeTab, setActiveTab] = useState('closet'); // 'closet', 'outfits', 'laundry'
-  const [clothes, setClothes] = useState(INITIAL_CLOTHES);
-  const [outfits, setOutfits] = useState(INITIAL_OUTFITS);
+  const [clothes, setClothes] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_clothes');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return INITIAL_CLOTHES;
+  });
+  const [outfits, setOutfits] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bts_cached_outfits');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return INITIAL_OUTFITS;
+  });
 
   // Add Item Modal
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -73,10 +85,16 @@ export default function Outfits() {
           apiRequest('/clothing'),
           apiRequest('/outfits')
         ]);
-        if (Array.isArray(clothRes) && clothRes.length > 0) setClothes(clothRes);
-        if (Array.isArray(outfitRes) && outfitRes.length > 0) setOutfits(outfitRes);
+        if (Array.isArray(clothRes)) {
+          setClothes(clothRes);
+          try { localStorage.setItem('bts_cached_clothes', JSON.stringify(clothRes)); } catch (e) {}
+        }
+        if (Array.isArray(outfitRes)) {
+          setOutfits(outfitRes);
+          try { localStorage.setItem('bts_cached_outfits', JSON.stringify(outfitRes)); } catch (e) {}
+        }
       } catch (e) {
-        // fallback
+        // fallback / cached data
       }
     }
     loadCloset();
@@ -95,7 +113,9 @@ export default function Outfits() {
       worn_count: 0
     };
 
-    setClothes(prev => [newItem, ...prev]);
+    const updatedClothes = [newItem, ...clothes];
+    setClothes(updatedClothes);
+    try { localStorage.setItem('bts_cached_clothes', JSON.stringify(updatedClothes)); } catch (e) {}
     try {
       await apiRequest('/clothing', {
         method: 'POST',
@@ -110,7 +130,9 @@ export default function Outfits() {
 
   const handleToggleLaundry = async (id, currentStatus) => {
     const nextStatus = currentStatus === 'clean' ? 'in_laundry' : currentStatus === 'in_laundry' ? 'needs_ironing' : 'clean';
-    setClothes(prev => prev.map(c => c.id === id ? { ...c, laundry_status: nextStatus } : c));
+    const updatedClothes = clothes.map(c => c.id === id ? { ...c, laundry_status: nextStatus } : c);
+    setClothes(updatedClothes);
+    try { localStorage.setItem('bts_cached_clothes', JSON.stringify(updatedClothes)); } catch (e) {}
     try {
       await apiRequest(`/clothing/${id}`, {
         method: 'PUT',
@@ -120,18 +142,38 @@ export default function Outfits() {
   };
 
   const deleteItem = async (id) => {
-    setClothes(prev => prev.filter(c => c.id !== id));
+    const updatedClothes = clothes.filter(c => c.id !== id);
+    setClothes(updatedClothes);
+    try { localStorage.setItem('bts_cached_clothes', JSON.stringify(updatedClothes)); } catch (e) {}
     try {
       await apiRequest(`/clothing/${id}`, { method: 'DELETE' });
     } catch (e) {}
   };
 
+  const deleteOutfit = async (id) => {
+    const updatedOutfits = outfits.filter(o => o.id !== id);
+    setOutfits(updatedOutfits);
+    try { localStorage.setItem('bts_cached_outfits', JSON.stringify(updatedOutfits)); } catch (e) {}
+    try {
+      await apiRequest(`/outfits/${id}`, { method: 'DELETE' });
+    } catch (e) {}
+  };
+
   const markOutfitToday = async (id) => {
-    setOutfits(prev => prev.map(o => ({
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const updatedOutfits = outfits.map(o => ({
       ...o,
       is_today: o.id === id,
-      last_worn: o.id === id ? new Date().toISOString().slice(0, 10) : o.last_worn
-    })));
+      last_worn: o.id === id ? todayStr : o.last_worn
+    }));
+    setOutfits(updatedOutfits);
+    try { localStorage.setItem('bts_cached_outfits', JSON.stringify(updatedOutfits)); } catch (e) {}
+    try {
+      await apiRequest(`/outfits/${id}/today`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_today: true, last_worn: todayStr })
+      });
+    } catch (e) {}
   };
 
   const handleCreateOutfit = async (e) => {
@@ -148,7 +190,9 @@ export default function Outfits() {
       is_today: false
     };
 
-    setOutfits(prev => [newOutfit, ...prev]);
+    const updatedOutfits = [newOutfit, ...outfits];
+    setOutfits(updatedOutfits);
+    try { localStorage.setItem('bts_cached_outfits', JSON.stringify(updatedOutfits)); } catch (e) {}
     try {
       await apiRequest('/outfits', {
         method: 'POST',
@@ -276,13 +320,18 @@ export default function Outfits() {
             >
               <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
                 <h3 style={{ fontSize: '1.05rem' }}>{outfit.name}</h3>
-                {outfit.is_today ? (
-                  <Badge variant="sage">Wearing Today</Badge>
-                ) : (
-                  <Button variant="secondary" size="sm" onClick={() => markOutfitToday(outfit.id)}>
-                    Wear Today
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  {outfit.is_today ? (
+                    <Badge variant="sage">Wearing Today</Badge>
+                  ) : (
+                    <Button variant="secondary" size="sm" onClick={() => markOutfitToday(outfit.id)}>
+                      Wear Today
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" onClick={() => deleteOutfit(outfit.id)} title="Delete outfit">
+                    <Trash2 size={15} />
                   </Button>
-                )}
+                </div>
               </div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                 Occasion: {outfit.occasion} · Last worn {outfit.last_worn}
@@ -291,7 +340,7 @@ export default function Outfits() {
               <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-sm)' }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Pieces:</span>
                 <ul style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', marginTop: '0.25rem', paddingLeft: '1.25rem' }}>
-                  {outfit.items.map((it, idx) => (
+                  {(Array.isArray(outfit.items) ? outfit.items : []).map((it, idx) => (
                     <li key={idx}>{it}</li>
                   ))}
                 </ul>

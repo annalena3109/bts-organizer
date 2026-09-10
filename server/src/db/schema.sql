@@ -57,13 +57,14 @@ CREATE INDEX IF NOT EXISTS idx_expenses_user ON expenses(user_id);
 CREATE TABLE IF NOT EXISTS meals (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  day_of_week TEXT NOT NULL,
+  date TEXT,
+  day_of_week TEXT,
   breakfast TEXT,
   lunch TEXT,
   dinner TEXT,
-  snack TEXT,
-  UNIQUE (user_id, day_of_week)
+  snack TEXT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meals_user_date ON meals(user_id, date);
 
 CREATE TABLE IF NOT EXISTS shopping_items (
   id TEXT PRIMARY KEY,
