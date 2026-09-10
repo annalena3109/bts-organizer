@@ -81,9 +81,10 @@ router.post('/shopping-list', async (req, res) => {
       checked: false,
       created_at: new Date().toISOString()
     };
+    const checkedVal = newItem.checked ? 1 : 0;
     await db.query(
       'INSERT INTO shopping_items (id, user_id, item, category, checked) VALUES ($1, $2, $3, $4, $5)',
-      [newItem.id, newItem.user_id, newItem.item, newItem.category, newItem.checked]
+      [newItem.id, newItem.user_id, newItem.item, newItem.category, checkedVal]
     );
     res.status(201).json(newItem);
   } catch (err) {
@@ -95,9 +96,10 @@ router.post('/shopping-list', async (req, res) => {
 router.patch('/shopping-list/:id/toggle', async (req, res) => {
   try {
     const { checked } = req.body;
+    const checkedVal = checked ? 1 : 0;
     await db.query(
       'UPDATE shopping_items SET checked = $1 WHERE id = $2 AND user_id = $3',
-      [checked, req.params.id, req.user.id]
+      [checkedVal, req.params.id, req.user.id]
     );
     res.json({ success: true });
   } catch (err) {

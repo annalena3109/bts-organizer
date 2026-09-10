@@ -1,5 +1,5 @@
 services:
-  # Web Service hosting Node/Express API and React Frontend
+  # Web Service hosting Node/Express API and React Frontend (Free tier on Render)
   - type: web
     name: backtoschool-app
     runtime: node
@@ -13,14 +13,8 @@ services:
         value: 5000
       - key: JWT_SECRET
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: backtoschool-db
-          property: connectionString
-
-databases:
-  # Render Managed PostgreSQL Database
-  - name: backtoschool-db
-    plan: free
-    databaseName: backtoschool
-    user: backtoschool_user
+      # Turso Serverless Database Credentials (Free Forever, 9 GB storage)
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

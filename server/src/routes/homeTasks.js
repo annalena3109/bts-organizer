@@ -32,9 +32,10 @@ router.post('/', async (req, res) => {
       is_completed: false,
       last_cleaned: 'Pending'
     };
+    const isCompletedVal = newTask.is_completed ? 1 : 0;
     await db.query(
       'INSERT INTO home_tasks (id, user_id, title, area, frequency, is_completed, last_cleaned) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [newTask.id, newTask.user_id, newTask.title, newTask.area, newTask.frequency, newTask.is_completed, newTask.last_cleaned]
+      [newTask.id, newTask.user_id, newTask.title, newTask.area, newTask.frequency, isCompletedVal, newTask.last_cleaned]
     );
     res.status(201).json(newTask);
   } catch (err) {
@@ -46,10 +47,11 @@ router.post('/', async (req, res) => {
 router.patch('/:id/toggle', async (req, res) => {
   try {
     const { is_completed } = req.body;
+    const isCompletedVal = is_completed ? 1 : 0;
     const lastCleaned = is_completed ? 'Today' : 'Pending';
     await db.query(
       'UPDATE home_tasks SET is_completed = $1, last_cleaned = $2 WHERE id = $3 AND user_id = $4',
-      [is_completed, lastCleaned, req.params.id, req.user.id]
+      [isCompletedVal, lastCleaned, req.params.id, req.user.id]
     );
     res.json({ success: true, last_cleaned: lastCleaned });
   } catch (err) {

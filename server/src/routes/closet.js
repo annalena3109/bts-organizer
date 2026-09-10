@@ -104,9 +104,10 @@ router.post('/outfits', async (req, res) => {
       last_worn: last_worn || new Date().toISOString().slice(0, 10),
       is_today: is_today || false
     };
+    const isTodayVal = newOutfit.is_today ? 1 : 0;
     await db.query(
       'INSERT INTO outfits (id, user_id, name, occasion, items, last_worn, is_today) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [newOutfit.id, newOutfit.user_id, newOutfit.name, newOutfit.occasion, newOutfit.items, newOutfit.last_worn, newOutfit.is_today]
+      [newOutfit.id, newOutfit.user_id, newOutfit.name, newOutfit.occasion, newOutfit.items, newOutfit.last_worn, isTodayVal]
     );
     res.status(201).json(newOutfit);
   } catch (err) {

@@ -40,9 +40,10 @@ router.post('/', async (req, res) => {
       created_at: new Date().toISOString()
     };
 
+    const completedVal = newTask.completed ? 1 : 0;
     await db.query(
       'INSERT INTO tasks (id, user_id, title, description, category, priority, due_date, completed) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-      [newTask.id, newTask.user_id, newTask.title, newTask.description, newTask.category, newTask.priority, newTask.due_date, newTask.completed]
+      [newTask.id, newTask.user_id, newTask.title, newTask.description, newTask.category, newTask.priority, newTask.due_date, completedVal]
     );
 
     res.status(201).json(newTask);
@@ -55,9 +56,10 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { title, description, category, priority, due_date, completed } = req.body;
+    const completedVal = completed ? 1 : 0;
     await db.query(
       'UPDATE tasks SET title = $1, description = $2, category = $3, priority = $4, due_date = $5, completed = $6 WHERE id = $7 AND user_id = $8',
-      [title, description, category, priority, due_date, completed, req.params.id, req.user.id]
+      [title, description, category, priority, due_date, completedVal, req.params.id, req.user.id]
     );
     res.json({ success: true });
   } catch (err) {
@@ -69,9 +71,10 @@ router.put('/:id', async (req, res) => {
 router.patch('/:id/toggle', async (req, res) => {
   try {
     const { completed } = req.body;
+    const completedVal = completed ? 1 : 0;
     await db.query(
       'UPDATE tasks SET completed = $1 WHERE id = $2 AND user_id = $3',
-      [completed, req.params.id, req.user.id]
+      [completedVal, req.params.id, req.user.id]
     );
     res.json({ success: true });
   } catch (err) {
